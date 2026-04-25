@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.pyc
+save_auto.json
+save_data.json
+build/

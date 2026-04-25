@@ -3,8 +3,10 @@ utils.py
 Helper functions.
 """
 
-from combat import defense_amount
+from combat import damage_amount
 
 
 def simulate_damage(attacker, defender):
-    return defender.hp - max(0, attacker.get_attack() - defense_amount(defender))
+    if not attacker.has_usable_weapon():
+        return defender.hp
+    return defender.hp - damage_amount(attacker, defender)

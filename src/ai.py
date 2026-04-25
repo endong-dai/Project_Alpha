@@ -2,7 +2,7 @@
 ai.py
 Enemy AI.
 """
-from combat import in_range, combat
+from combat import effective_attack_range, in_range, combat
 from movement import get_reachable_tiles, manhattan_distance
 from utils import simulate_damage
 
@@ -10,11 +10,11 @@ from utils import simulate_damage
 def choose_target(enemy, players):
     alive = [p for p in players if p.is_alive()]
     best = None
-    best_hp = 999
+    best_score = None
     for p in alive:
-        hp = simulate_damage(enemy, p)
-        if hp < best_hp:
-            best_hp = hp
+        score = (p.hp, simulate_damage(enemy, p), manhattan_distance(enemy.get_position(), p.get_position()))
+        if best_score is None or score < best_score:
+            best_score = score
             best = p
     return best
 
@@ -27,7 +27,7 @@ def choose_destination(enemy, target, game_map):
     attack_positions = [
         tile
         for tile in reachable
-        if manhattan_distance(tile, target_pos) <= enemy.weapon.range
+        if manhattan_distance(tile, target_pos) <= effective_attack_range(enemy)
     ]
 
     if attack_positions:
@@ -49,7 +49,7 @@ def choose_destination(enemy, target, game_map):
 
 
 def enemy_action(enemy, players, game_map):
-    log = []
+    log = {"attacks": [], "events": []}
     if not enemy.is_alive():
         return log
 

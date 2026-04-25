@@ -12,10 +12,12 @@ class MenuButton:
         self.label = label
         self.rect = pygame.Rect(rect)
         self.enabled = enabled
+        self.fill_color = None
+        self.text_color = None
 
     def draw(self, screen, font, colors):
-        fill = colors["button"] if self.enabled else colors["button_disabled"]
-        text_color = colors["text"] if self.enabled else colors["text_disabled"]
+        fill = self.fill_color or (colors["button"] if self.enabled else colors["button_disabled"])
+        text_color = self.text_color or (colors["text"] if self.enabled else colors["text_disabled"])
         pygame.draw.rect(screen, fill, self.rect, border_radius=6)
         pygame.draw.rect(screen, colors["border"], self.rect, 2, border_radius=6)
         label = font.render(self.label, True, text_color)
@@ -48,6 +50,10 @@ class VerticalMenu:
                     option.get("enabled", True),
                 )
             )
+            if "fill_color" in option:
+                self.buttons[-1].fill_color = option["fill_color"]
+            if "text_color" in option:
+                self.buttons[-1].text_color = option["text_color"]
             top += self.button_height + self.gap
 
     def draw(self, screen, font, colors):

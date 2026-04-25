@@ -9,20 +9,41 @@ class Unit:
         self,
         name,
         strength,
+        magic,
         defense,
+        resistance,
         speed,
         move,
         weapon,
+        unit_class,
+        allowed_weapon_types,
         inventory=None,
         max_hp=20,
         sprite_key=None,
+        class_id=None,
+        unit_id=None,
+        level=1,
+        exp=0,
+        crit=0,
+        current_hp=None,
+        persistent=False,
     ):
         self.name = name
         self.strength = strength
+        self.magic = magic
         self.defense = defense
+        self.resistance = resistance
         self.speed = speed
         self.move = move
-        self.weapon = weapon
+        self.class_id = class_id
+        self.unit_class = unit_class
+        self.unit_id = unit_id
+        self.level = level
+        self.exp = exp
+        self.crit = crit
+        self.persistent = persistent
+        self.allowed_weapon_types = tuple(allowed_weapon_types)
+        self.weapon = weapon if self._can_use_weapon(weapon) else None
         self.inventory = list(inventory) if inventory else []
         if weapon and weapon not in self.inventory:
             self.inventory.insert(0, weapon)
@@ -30,7 +51,7 @@ class Unit:
             self.weapon = self._find_first_weapon()
 
         self.max_hp = max_hp
-        self.hp = self.max_hp
+        self.hp = self.max_hp if current_hp is None else max(0, min(self.max_hp, current_hp))
         self.sprite_key = sprite_key
         self.game_map = None
         self.x = None
@@ -40,9 +61,16 @@ class Unit:
 
     def _find_first_weapon(self):
         for item in self.inventory:
-            if getattr(item, "item_type", None) == "weapon":
+            if self._can_use_weapon(item):
                 return item
         return None
+
+    def _can_use_weapon(self, weapon):
+        return (
+            getattr(weapon, "item_type", None) == "weapon"
+            and getattr(weapon, "durability", 0) > 0
+            and weapon.weapon_type in self.allowed_weapon_types
+        )
 
     def get_position(self):
         return self.x, self.y
@@ -62,10 +90,16 @@ class Unit:
         self.has_acted = False
 
     def equip_weapon(self, weapon):
-        if weapon in self.inventory and getattr(weapon, "item_type", None) == "weapon":
+        if weapon in self.inventory and self._can_use_weapon(weapon):
             self.weapon = weapon
             return True
         return False
+
+    def can_equip_weapon(self, weapon):
+        return self._can_use_weapon(weapon)
+
+    def has_usable_weapon(self):
+        return self._can_use_weapon(self.weapon)
 
     def heal(self, amount):
         old_hp = self.hp
@@ -81,5 +115,8 @@ class Unit:
         return False
 
     def get_attack(self):
-        weapon_attack = self.weapon.attack if self.weapon else 0
-        return self.strength + weapon_attack
+        if not self.weapon:
+            return 0
+        if self.weapon.damage_kind == "magical":
+            return self.magic + self.weapon.might
+        return self.strength + self.weapon.might
