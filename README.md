@@ -25,14 +25,3 @@ This project is currently under development and will continue to be expanded wit
 ## Debug 
 Use http://localhost:8000/?-i to find errors when testing on localhost
 
-## Codex fix error template
-Here is the exact runtime error after your last change.
-
-[paste traceback]
-
-Please fix this specific error only.
-Do not change gameplay.
-Do not refactor unrelated systems.
-Keep desktop behavior unchanged.
-Keep web compatibility work in scope only.
-Return only the modified parts.
