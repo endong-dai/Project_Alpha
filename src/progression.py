@@ -5,7 +5,8 @@ Persistent unit progression, EXP, and roster helpers.
 
 import random
 
-from inventory import Antidote, Potion
+from constants import EXP_PER_LEVEL, PROMOTION_MIN_LEVEL
+from inventory import Antidote, PromotionSeal, Potion
 from unit import Unit
 from unit_classes import (
     CLASS_PROFILES,
@@ -13,6 +14,9 @@ from unit_classes import (
     build_stats,
     choose_starting_weapon_specs,
     get_class_profile,
+    get_max_level,
+    get_promotion_bonuses,
+    get_promotion_target,
     get_weapon_spec,
     random_class_profile,
 )
@@ -61,6 +65,13 @@ GROWTH_RATES = {
     "rogue": {"max_hp": 0.55, "speed": 0.70, "strength": 0.40, "magic": 0.20, "defense": 0.25, "resistance": 0.45, "crit": 0.40},
     "elementalist": {"max_hp": 0.45, "speed": 0.45, "strength": 0.10, "magic": 0.70, "defense": 0.20, "resistance": 0.55, "crit": 0.24},
     "druid": {"max_hp": 0.55, "speed": 0.35, "strength": 0.20, "magic": 0.65, "defense": 0.35, "resistance": 0.50, "crit": 0.22},
+    # Tier 2 (promoted) — slightly higher growths than their base class.
+    "swordmaster": {"max_hp": 0.70, "speed": 0.70, "strength": 0.60, "magic": 0.20, "defense": 0.40, "resistance": 0.35, "crit": 0.35},
+    "paladin": {"max_hp": 0.75, "speed": 0.45, "strength": 0.55, "magic": 0.15, "defense": 0.60, "resistance": 0.35, "crit": 0.22},
+    "berserker": {"max_hp": 0.80, "speed": 0.40, "strength": 0.70, "magic": 0.10, "defense": 0.45, "resistance": 0.25, "crit": 0.25},
+    "assassin": {"max_hp": 0.60, "speed": 0.75, "strength": 0.45, "magic": 0.20, "defense": 0.30, "resistance": 0.50, "crit": 0.45},
+    "sage": {"max_hp": 0.50, "speed": 0.50, "strength": 0.10, "magic": 0.75, "defense": 0.25, "resistance": 0.60, "crit": 0.26},
+    "archsage": {"max_hp": 0.60, "speed": 0.40, "strength": 0.20, "magic": 0.70, "defense": 0.40, "resistance": 0.55, "crit": 0.24},
 }
 
 WEAPON_INDEX = {
@@ -81,6 +92,8 @@ def _make_item(spec):
         return Potion(spec[1], spec[2])
     if item_type == "antidote":
         return Antidote(spec[1])
+    if item_type == "promotion_seal":
+        return PromotionSeal(spec[1] if len(spec) > 1 else "Master Seal")
     return None
 
 
@@ -127,6 +140,9 @@ def serialize_item(item):
     if getattr(item, "item_type", None) == "antidote":
         return {"item_type": "antidote", "name": item.name}
 
+    if getattr(item, "item_type", None) == "promotion_seal":
+        return {"item_type": "promotion_seal", "name": item.name}
+
     return None
 
 
@@ -155,6 +171,8 @@ def deserialize_item(data):
         return Potion(data["name"], data["heal_amount"])
     if item_type == "antidote":
         return Antidote(data["name"])
+    if item_type == "promotion_seal":
+        return PromotionSeal(data.get("name", "Master Seal"))
     return None
 
 
@@ -310,7 +328,13 @@ def get_growth_rates(class_id):
     return GROWTH_RATES.get(class_id, GROWTH_RATES[CLASS_PROFILES[0]["id"]])
 
 
+def is_at_max_level(unit):
+    return unit.level >= get_max_level(unit.class_id)
+
+
 def level_up(unit, heal_on_hp_gain=True):
+    if is_at_max_level(unit):
+        return {}
     rates = get_growth_rates(unit.class_id)
     gains = {}
     unit.level += 1
@@ -336,12 +360,60 @@ def gain_exp(unit, amount):
     if amount <= 0:
         return []
 
+    if is_at_max_level(unit):
+        unit.exp = 0
+        return []
+
     unit.exp += amount
     level_gains = []
-    while unit.exp >= 100:
-        unit.exp -= 100
+    while unit.exp >= EXP_PER_LEVEL and not is_at_max_level(unit):
+        unit.exp -= EXP_PER_LEVEL
         level_gains.append(level_up(unit))
+    if is_at_max_level(unit):
+        unit.exp = 0
     return level_gains
+
+
+def can_promote(unit):
+    """A unit may promote once it reaches PROMOTION_MIN_LEVEL on a tier-1 class."""
+    if not unit.class_id or not get_promotion_target(unit.class_id):
+        return False
+    return unit.level >= PROMOTION_MIN_LEVEL
+
+
+def promote(unit):
+    """Promote a tier-1 unit into its fixed tier-2 class. Returns a result dict
+    describing the change, or None if the unit cannot promote."""
+    if not can_promote(unit):
+        return None
+
+    target_id = get_promotion_target(unit.class_id)
+    target = get_class_profile(target_id)
+    bonuses = get_promotion_bonuses(target_id)
+
+    for stat_name, amount in bonuses.items():
+        if stat_name == "max_hp":
+            unit.max_hp += amount
+            unit.hp = min(unit.max_hp, unit.hp + amount)
+        elif stat_name == "move":
+            unit.move += amount
+        else:
+            setattr(unit, stat_name, getattr(unit, stat_name, 0) + amount)
+
+    old_class_name = unit.unit_class
+    unit.class_id = target_id
+    unit.unit_class = target["name"]
+    unit.allowed_weapon_types = tuple(target["allowed_weapon_types"])
+    unit.level = 1
+    unit.exp = 0
+
+    return {
+        "unit_name": unit.name,
+        "old_class_name": old_class_name,
+        "new_class_id": target_id,
+        "new_class_name": target["name"],
+        "bonuses": bonuses,
+    }
 
 
 def calculate_attack_exp(attacker, defender, damage_dealt):

@@ -14,7 +14,9 @@ from combat import (
     in_range,
     roll_attack_result,
 )
-from inventory import Antidote, Potion, item_label
+from chapters_data import CHAPTERS
+from constants import PROMOTION_MIN_LEVEL, TRIANGLE_DISPLAY_RGB
+from inventory import Antidote, PromotionSeal, Potion, item_label
 from map import Map
 from menu import VerticalMenu
 from movement import can_move, find_shortest_move_path, get_reachable_tiles, get_reachable_tiles_from_position
@@ -24,13 +26,10 @@ import sandbox
 import save_system
 import shop
 from terrain import (
-    TERRAIN_FORT,
-    TERRAIN_GRASS,
     apply_end_turn_terrain_effect,
-    build_terrain_overlays,
-    draw_terrain_tile,
     get_terrain_data,
 )
+from terrain_render import build_terrain_overlays, draw_terrain_tile
 from unit import Unit
 from weapon import Weapon
 
@@ -138,131 +137,15 @@ sandbox_back_button = None
 slot_back_button = None
 slot_clear_button = None
 
-CHAPTERS = {
-    1: {
-        "name": "Chapter 1",
-        "enemy_level": 1,
-        "players": [
-            {
-                "unit_id": "hero",
-                "name": "Hero",
-                "strength": 5,
-                "defense": 5,
-                "speed": 8,
-                "move": 3,
-                "max_hp": 18,
-                "weapon": ("Iron Sword", 5, 1),
-                "inventory": [
-                    ("weapon", "Iron Sword", 5, 1),
-                    ("weapon", "Javelin", 4, 2),
-                    ("potion", "Potion", 8),
-                ],
-                "sprite_key": "F1",
-                "position": (3, 3),
-            }
-        ],
-        "enemies": [
-            {
-                "name": "Enemy",
-                "level": 1,
-                "strength": 4,
-                "defense": 4,
-                "speed": 5,
-                "move": 3,
-                "max_hp": 16,
-                "weapon": ("Iron Blade", 5, 1),
-                "inventory": [("weapon", "Iron Blade", 5, 1)],
-                "sprite_key": "E1",
-                "position": (3, 6),
-            }
-        ],
-        "terrain": [
-            (TERRAIN_GRASS, 2, 2),
-            (TERRAIN_GRASS, 4, 2),
-            (TERRAIN_GRASS, 2, 4),
-            (TERRAIN_FORT, 5, 5),
-        ],
-    },
-    2: {
-        "name": "Chapter 2",
-        "enemy_level": 3,
-        "players": [
-            {
-                "unit_id": "hero",
-                "name": "Hero",
-                "strength": 5,
-                "defense": 5,
-                "speed": 8,
-                "move": 3,
-                "max_hp": 18,
-                "weapon": ("Iron Sword", 5, 1),
-                "inventory": [
-                    ("weapon", "Iron Sword", 5, 1),
-                    ("weapon", "Javelin", 4, 2),
-                    ("potion", "Potion", 8),
-                ],
-                "sprite_key": "F1",
-                "position": (2, 3),
-            },
-            {
-                "unit_id": "knight",
-                "name": "Knight",
-                "strength": 6,
-                "defense": 7,
-                "speed": 4,
-                "move": 2,
-                "max_hp": 20,
-                "weapon": ("Lance", 4, 1),
-                "inventory": [
-                    ("weapon", "Lance", 4, 1),
-                    ("weapon", "Javelin", 3, 2),
-                ],
-                "sprite_key": "M1",
-                "position": (4, 3),
-            },
-        ],
-        "enemies": [
-            {
-                "name": "Bandit",
-                "level": 3,
-                "strength": 5,
-                "defense": 3,
-                "speed": 5,
-                "move": 3,
-                "max_hp": 16,
-                "weapon": ("Axe", 5, 1),
-                "inventory": [("weapon", "Axe", 5, 1)],
-                "sprite_key": "E1",
-                "position": (2, 7),
-            },
-            {
-                "name": "Soldier",
-                "level": 3,
-                "strength": 4,
-                "defense": 5,
-                "speed": 4,
-                "move": 3,
-                "max_hp": 17,
-                "weapon": ("Spear", 4, 1),
-                "inventory": [("weapon", "Spear", 4, 1)],
-                "sprite_key": "E2",
-                "position": (5, 6),
-            },
-        ],
-        "terrain": [
-            (TERRAIN_GRASS, 1, 3),
-            (TERRAIN_GRASS, 2, 4),
-            (TERRAIN_GRASS, 4, 4),
-            (TERRAIN_GRASS, 6, 5),
-            (TERRAIN_FORT, 3, 5),
-            (TERRAIN_FORT, 6, 6),
-        ],
-    },
-}
-
 def load_unit_sprite(filename):
     image_path = os.path.join(ASSET_DIR, filename)
-    image = pygame.image.load(image_path).convert_alpha()
+    try:
+        image = pygame.image.load(image_path).convert_alpha()
+    except (pygame.error, FileNotFoundError) as exc:
+        # Missing/corrupt sprite: fall back to None so the renderer draws a
+        # placeholder rect instead of crashing (important on the web build).
+        startup_log(f"Failed to load sprite {filename}: {exc}")
+        return None
     max_size = CELL - 10
     width, height = image.get_size()
     scale = min(max_size / width, max_size / height)
@@ -448,9 +331,6 @@ def init_state():
     global level_up_popups, pending_combat_resolution
     global action_panel_scroll, action_entry_buttons, last_battle_sidebar_layout
     global hovered_board_tile, selected_board_tile, movement_preview_path
-    global hovered_board_tile, selected_board_tile, movement_preview_path
-    global hovered_board_tile, selected_board_tile, movement_preview_path
-    global action_panel_scroll, action_entry_buttons, last_battle_sidebar_layout
 
     game_map = Map()
     players = []
@@ -500,15 +380,6 @@ def init_state():
     hovered_board_tile = None
     selected_board_tile = None
     movement_preview_path = []
-    hovered_board_tile = None
-    selected_board_tile = None
-    movement_preview_path = []
-    hovered_board_tile = None
-    selected_board_tile = None
-    movement_preview_path = []
-    action_panel_scroll = 0
-    action_entry_buttons = []
-    last_battle_sidebar_layout = None
     new_game_state()
 
 
@@ -1892,6 +1763,20 @@ def use_inventory_item(item):
     if getattr(item, "item_type", None) == "antidote":
         add_log(f"{selected_unit.name} has no status ailment.")
         interaction_state = "planning"
+        return
+
+    if getattr(item, "item_type", None) == "promotion_seal":
+        if progression.can_promote(selected_unit):
+            result = progression.promote(selected_unit)
+            selected_unit.remove_item(item)
+            add_log(
+                f"{result['unit_name']} promoted: {result['old_class_name']} -> {result['new_class_name']}!"
+            )
+            finish_selected_action()
+        else:
+            add_log(f"{selected_unit.name} cannot promote yet (needs Lv{PROMOTION_MIN_LEVEL}).")
+            interaction_state = "planning"
+        return
 
 
 def execute_attack(target):
@@ -2069,7 +1954,7 @@ def build_item_menu():
             label = f"{label} [Equipped]"
         elif is_incompatible_weapon(selected_unit, item):
             label = f"{label} [Unusable]"
-        if getattr(item, "item_type", None) == "potion" and selected_unit.hp >= selected_unit.max_hp:
+        if not is_item_usable_now(selected_unit, item):
             enabled = False
         options.append(
             {
@@ -2095,9 +1980,7 @@ def get_scrollable_action_options():
                 {
                     "key": f"item:{index}",
                     "lines": [line_one, line_two],
-                    "enabled": not (
-                        getattr(item, "item_type", None) == "potion" and selected_unit.hp >= selected_unit.max_hp
-                    ),
+                    "enabled": is_item_usable_now(selected_unit, item),
                     "text_color": RED if is_incompatible_weapon(selected_unit, item) else BLACK,
                 }
             )
@@ -2465,6 +2348,16 @@ def ellipsize_text(text, render_font, max_width):
     return (trimmed + ellipsis) if trimmed else ellipsis
 
 
+def is_item_usable_now(unit, item):
+    """Whether an inventory item can be used by ``unit`` this turn."""
+    item_type = getattr(item, "item_type", None)
+    if item_type == "potion" and unit.hp >= unit.max_hp:
+        return False
+    if item_type == "promotion_seal" and not progression.can_promote(unit):
+        return False
+    return True
+
+
 def item_summary_lines(item, unit=None):
     if getattr(item, "item_type", None) == "weapon":
         line_one = f"{item.name} ({item.durability}/{item.max_durability})"
@@ -2478,6 +2371,14 @@ def item_summary_lines(item, unit=None):
         return item.name, f"Heal {item.heal_amount}"
     if getattr(item, "item_type", None) == "antidote":
         return item.name, "Cure"
+    if getattr(item, "item_type", None) == "promotion_seal":
+        target_id = progression.get_promotion_target(unit.class_id) if unit else None
+        if target_id:
+            target_name = progression.get_class_profile(target_id)["name"]
+            if progression.can_promote(unit):
+                return item.name, f"Promote -> {target_name}"
+            return item.name, f"Need Lv{PROMOTION_MIN_LEVEL} -> {target_name}"
+        return item.name, "Cannot promote"
     return getattr(item, "name", "Item"), ""
 
 
@@ -2737,6 +2638,24 @@ def draw_action_panel(layout):
         action_entry_buttons = []
 
 
+def triangle_tag(relation):
+    """Short advantage marker for the weapon triangle: WT+ / WT- / blank."""
+    if relation > 0:
+        return "WT+"
+    if relation < 0:
+        return "WT-"
+    return ""
+
+
+def draw_triangle_chip(color, rect):
+    """Draw a small red/green/blue color chip marking a unit's weapon color."""
+    rgb = TRIANGLE_DISPLAY_RGB.get(color)
+    if not rgb:
+        return
+    chip = pygame.Rect(rect.right - 12, rect.y - 1, 9, 9)
+    pygame.draw.rect(screen, rgb, chip, border_radius=2)
+
+
 def draw_battle_preview_panel(layout):
     if phase == "START":
         return
@@ -2756,7 +2675,7 @@ def draw_battle_preview_panel(layout):
     player_lines = [
         f"{preview['attacker']['name']} | {selected_unit.unit_class}",
         f"Wpn {preview['attacker']['weapon']} {preview['attacker']['weapon_durability']}",
-        f"HP {preview['attacker']['hp']}  Atk {preview['attacker']['atk']}",
+        f"HP {preview['attacker']['hp']}  Atk {preview['attacker']['atk']} {triangle_tag(preview['attacker_triangle'])}",
         f"Hit {preview['attacker']['hit']}  Crit {preview['attacker']['crit']}  x{preview['attacker_hits']}",
     ]
     if preview["counter"]:
@@ -2766,11 +2685,13 @@ def draw_battle_preview_panel(layout):
     enemy_lines = [
         f"{preview['defender']['name']} | {preview_target.unit_class}",
         f"Wpn {preview['defender']['weapon']} {preview['defender']['weapon_durability']}",
-        f"HP {preview['defender']['hp']}  Atk {preview['defender']['atk']}",
+        f"HP {preview['defender']['hp']}  Atk {preview['defender']['atk']} {triangle_tag(preview['defender_triangle'])}",
         enemy_bottom,
     ]
     draw_panel_lines(player_lines, left_rect, start_y=0, render_font=tiny_font, line_height=14, padding=0)
     draw_panel_lines(enemy_lines, right_rect, start_y=0, render_font=tiny_font, line_height=14, padding=0)
+    draw_triangle_chip(preview["attacker"].get("color"), left_rect)
+    draw_triangle_chip(preview["defender"].get("color"), right_rect)
 
     footer_line = (
         f"P x{preview['attacker_hits']} / E x{preview['defender_hits']} | Follow-up: {preview['follow_up']}"

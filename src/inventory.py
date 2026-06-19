@@ -25,6 +25,16 @@ class Antidote:
         return f"{self.name} CURE"
 
 
+class PromotionSeal:
+    item_type = "promotion_seal"
+
+    def __init__(self, name="Master Seal"):
+        self.name = name
+
+    def label(self):
+        return f"{self.name} PROMOTE"
+
+
 def item_label(item):
     if hasattr(item, "label"):
         return item.label()

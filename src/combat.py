@@ -5,6 +5,19 @@ Combat with hit rate (based on speed)
 
 import random
 
+from constants import (
+    CRIT_DAMAGE_MULTIPLIER,
+    FOLLOW_UP_SPEED_GAP,
+    HIT_RATE_BASE,
+    HIT_RATE_MAX,
+    HIT_RATE_MIN,
+    SPEED_AVOID_FACTOR,
+    SPEED_HIT_FACTOR,
+    TRIANGLE_BEATS,
+    TRIANGLE_DAMAGE_BONUS,
+    TRIANGLE_HIT_BONUS,
+    WEAPON_COLOR,
+)
 from progression import calculate_attack_exp, calculate_defend_exp, gain_exp
 from terrain import (
     get_terrain_avoid_bonus,
@@ -13,8 +26,6 @@ from terrain import (
     get_terrain_range_bonus,
     get_thunder_damage_multiplier,
 )
-
-FOLLOW_UP_SPEED_GAP = 4
 
 
 def get_weapon_range_bounds(weapon_or_range):
@@ -93,7 +104,7 @@ def get_unit_terrain(unit):
 def avoid_amount(unit):
     terrain_type = get_unit_terrain(unit)
     terrain_avoid = get_terrain_avoid_bonus(terrain_type)
-    return unit.speed * 5 + terrain_avoid
+    return unit.speed * SPEED_AVOID_FACTOR + terrain_avoid
 
 
 def defense_amount(unit):
@@ -108,18 +119,53 @@ def defense_amount_for_kind(unit, damage_kind):
     return unit.defense + terrain_defense
 
 
+def weapon_color(weapon):
+    if weapon is None:
+        return None
+    return WEAPON_COLOR.get(getattr(weapon, "weapon_type", None))
+
+
+def triangle_relation(attacker_weapon, defender_weapon):
+    """+1 attacker has the advantage, -1 disadvantage, 0 neutral/colorless."""
+    attacker_color = weapon_color(attacker_weapon)
+    defender_color = weapon_color(defender_weapon)
+    if attacker_color is None or defender_color is None or attacker_color == defender_color:
+        return 0
+    if TRIANGLE_BEATS.get(attacker_color) == defender_color:
+        return 1
+    if TRIANGLE_BEATS.get(defender_color) == attacker_color:
+        return -1
+    return 0
+
+
+def triangle_modifier(attacker_weapon, defender_weapon):
+    """Return (hit_delta, damage_delta) from the weapon-color triangle."""
+    relation = triangle_relation(attacker_weapon, defender_weapon)
+    return relation * TRIANGLE_HIT_BONUS, relation * TRIANGLE_DAMAGE_BONUS
+
+
 def hit_rate(attacker, defender):
     terrain_type = get_unit_terrain(attacker)
-    rate = 70 + attacker.speed * 5 + get_terrain_hit_bonus(terrain_type) - avoid_amount(defender)
-    return max(30, min(95, rate))
+    triangle_hit, _ = triangle_modifier(attacker.weapon, defender.weapon)
+    rate = (
+        HIT_RATE_BASE
+        + attacker.speed * SPEED_HIT_FACTOR
+        + get_terrain_hit_bonus(terrain_type)
+        + triangle_hit
+        - avoid_amount(defender)
+    )
+    return max(HIT_RATE_MIN, min(HIT_RATE_MAX, rate))
 
 
 def damage_amount(attacker, defender):
     if not attacker.has_usable_weapon():
         return 0
+    _, triangle_damage = triangle_modifier(attacker.weapon, defender.weapon)
     damage = max(
         0,
-        attacker.get_attack() - defense_amount_for_kind(defender, attacker.weapon.damage_kind),
+        attacker.get_attack()
+        + triangle_damage
+        - defense_amount_for_kind(defender, attacker.weapon.damage_kind),
     )
     if attacker.weapon.weapon_type == "thunder":
         damage = int(damage * get_thunder_damage_multiplier(get_unit_terrain(defender)))
@@ -175,6 +221,8 @@ def build_forecast_side(attacker, defender, can_strike):
     return {
         "name": attacker.name,
         "weapon": attacker.weapon.name if attacker.weapon else "None",
+        "color": weapon_color(attacker.weapon),
+        "triangle": triangle_relation(attacker.weapon, defender.weapon) if can_strike else 0,
         "weapon_durability": (
             f"{attacker.weapon.durability}/{attacker.weapon.max_durability}"
             if attacker.weapon
@@ -203,6 +251,8 @@ def attack_preview(attacker, defender):
         "attacker_hit": attacker_side["hit"],
         "attacker_damage": attacker_side["atk"],
         "attacker_crit": attacker_side["crit"],
+        "attacker_triangle": attacker_side["triangle"],
+        "defender_triangle": defender_side["triangle"],
         "defender_hp": expected_hp_after_attack(attacker, defender),
         "counter": counter,
         "defender_hit": defender_side["hit"],
@@ -226,7 +276,7 @@ def attack_once(attacker, defender):
     if random.randint(1, 100) <= rate:
         dmg = damage_amount(attacker, defender)
         if random.randint(1, 100) <= crit_rate(attacker):
-            dmg *= 3
+            dmg *= CRIT_DAMAGE_MULTIPLIER
         defender.hp -= dmg
         return True, dmg
     return False, 0
@@ -239,7 +289,7 @@ def roll_attack_result(attacker, defender):
     critical = hit and random.randint(1, 100) <= crit_rate(attacker)
     damage = damage_amount(attacker, defender) if hit else 0
     if critical:
-        damage *= 3
+        damage *= CRIT_DAMAGE_MULTIPLIER
     return {
         "attacker_name": attacker.name,
         "weapon_name": weapon_name,

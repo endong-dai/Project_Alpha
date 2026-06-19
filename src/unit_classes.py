@@ -5,10 +5,16 @@ Class and weapon definitions for battle units.
 
 import random
 
+from constants import TIER1_MAX_LEVEL, TIER2_MAX_LEVEL
+
 PHYSICAL = "physical"
 MAGICAL = "magical"
 
+# Each tier-1 class has a fixed promotion target (no horizontal transfer).
+# ``promotion_bonuses`` is the one-time stat boost applied when a unit promotes
+# *into* a tier-2 class (see progression.promote).
 CLASS_PROFILES = [
+    # --- Tier 1 (base classes, Lv cap 20) -----------------------------------
     {
         "id": "sword_fighter",
         "name": "Sword Fighter",
@@ -17,6 +23,10 @@ CLASS_PROFILES = [
         "magic_mod": 0,
         "defense_mod": 0,
         "resistance_mod": 0,
+        "tier": 1,
+        "max_level": TIER1_MAX_LEVEL,
+        "promotes_to": "swordmaster",
+        "promotion_bonuses": {},
     },
     {
         "id": "lancer",
@@ -26,6 +36,10 @@ CLASS_PROFILES = [
         "magic_mod": 0,
         "defense_mod": 1,
         "resistance_mod": 0,
+        "tier": 1,
+        "max_level": TIER1_MAX_LEVEL,
+        "promotes_to": "paladin",
+        "promotion_bonuses": {},
     },
     {
         "id": "axe_fighter",
@@ -35,6 +49,10 @@ CLASS_PROFILES = [
         "magic_mod": 0,
         "defense_mod": 0,
         "resistance_mod": -1,
+        "tier": 1,
+        "max_level": TIER1_MAX_LEVEL,
+        "promotes_to": "berserker",
+        "promotion_bonuses": {},
     },
     {
         "id": "rogue",
@@ -44,6 +62,10 @@ CLASS_PROFILES = [
         "magic_mod": 0,
         "defense_mod": 0,
         "resistance_mod": 1,
+        "tier": 1,
+        "max_level": TIER1_MAX_LEVEL,
+        "promotes_to": "assassin",
+        "promotion_bonuses": {},
     },
     {
         "id": "elementalist",
@@ -53,6 +75,10 @@ CLASS_PROFILES = [
         "magic_mod": 2,
         "defense_mod": 0,
         "resistance_mod": 1,
+        "tier": 1,
+        "max_level": TIER1_MAX_LEVEL,
+        "promotes_to": "sage",
+        "promotion_bonuses": {},
     },
     {
         "id": "druid",
@@ -62,10 +88,109 @@ CLASS_PROFILES = [
         "magic_mod": 2,
         "defense_mod": 1,
         "resistance_mod": 0,
+        "tier": 1,
+        "max_level": TIER1_MAX_LEVEL,
+        "promotes_to": "archsage",
+        "promotion_bonuses": {},
+    },
+    # --- Tier 2 (promoted classes, Lv cap 20) -------------------------------
+    {
+        "id": "swordmaster",
+        "name": "Swordmaster",
+        "allowed_weapon_types": ["sword"],
+        "strength_mod": 2,
+        "magic_mod": 0,
+        "defense_mod": 1,
+        "resistance_mod": 1,
+        "tier": 2,
+        "max_level": TIER2_MAX_LEVEL,
+        "promotes_to": None,
+        "promotion_bonuses": {"max_hp": 3, "strength": 2, "speed": 2, "defense": 1, "resistance": 1, "crit": 5},
+    },
+    {
+        "id": "paladin",
+        "name": "Paladin",
+        "allowed_weapon_types": ["lance"],
+        "strength_mod": 1,
+        "magic_mod": 0,
+        "defense_mod": 2,
+        "resistance_mod": 1,
+        "tier": 2,
+        "max_level": TIER2_MAX_LEVEL,
+        "promotes_to": None,
+        "promotion_bonuses": {"max_hp": 4, "strength": 2, "defense": 2, "resistance": 1, "speed": 1, "move": 1},
+    },
+    {
+        "id": "berserker",
+        "name": "Berserker",
+        "allowed_weapon_types": ["axe"],
+        "strength_mod": 3,
+        "magic_mod": 0,
+        "defense_mod": 1,
+        "resistance_mod": -1,
+        "tier": 2,
+        "max_level": TIER2_MAX_LEVEL,
+        "promotes_to": None,
+        "promotion_bonuses": {"max_hp": 5, "strength": 3, "defense": 1, "speed": 1, "crit": 5},
+    },
+    {
+        "id": "assassin",
+        "name": "Assassin",
+        "allowed_weapon_types": ["dagger"],
+        "strength_mod": 1,
+        "magic_mod": 0,
+        "defense_mod": 0,
+        "resistance_mod": 1,
+        "tier": 2,
+        "max_level": TIER2_MAX_LEVEL,
+        "promotes_to": None,
+        "promotion_bonuses": {"max_hp": 3, "strength": 2, "speed": 2, "resistance": 1, "crit": 8, "move": 1},
+    },
+    {
+        "id": "sage",
+        "name": "Sage",
+        "allowed_weapon_types": ["fire", "thunder"],
+        "strength_mod": -1,
+        "magic_mod": 3,
+        "defense_mod": 1,
+        "resistance_mod": 2,
+        "tier": 2,
+        "max_level": TIER2_MAX_LEVEL,
+        "promotes_to": None,
+        "promotion_bonuses": {"max_hp": 3, "magic": 3, "resistance": 2, "speed": 1, "defense": 1},
+    },
+    {
+        "id": "archsage",
+        "name": "Archsage",
+        "allowed_weapon_types": ["earth", "wind"],
+        "strength_mod": 0,
+        "magic_mod": 3,
+        "defense_mod": 2,
+        "resistance_mod": 1,
+        "tier": 2,
+        "max_level": TIER2_MAX_LEVEL,
+        "promotes_to": None,
+        "promotion_bonuses": {"max_hp": 3, "magic": 3, "defense": 1, "resistance": 2, "speed": 1},
     },
 ]
 
 CLASS_LOOKUP = {profile["id"]: profile for profile in CLASS_PROFILES}
+
+
+def get_max_level(class_id):
+    profile = CLASS_LOOKUP.get(class_id)
+    return profile["max_level"] if profile else TIER1_MAX_LEVEL
+
+
+def get_promotion_target(class_id):
+    """Return the tier-2 class_id this class promotes into, or None."""
+    profile = CLASS_LOOKUP.get(class_id)
+    return profile.get("promotes_to") if profile else None
+
+
+def get_promotion_bonuses(class_id):
+    profile = CLASS_LOOKUP.get(class_id)
+    return dict(profile.get("promotion_bonuses", {})) if profile else {}
 
 WEAPON_LIBRARY = [
     {"id": "iron_sword", "name": "Iron Sword", "weapon_type": "sword", "damage_kind": PHYSICAL, "might": 5, "range": 1, "cost": 120, "crit_bonus": 0, "starter": True},
@@ -116,8 +241,13 @@ def get_class_profile(class_id):
     return CLASS_LOOKUP[class_id]
 
 
+TIER1_PROFILES = [profile for profile in CLASS_PROFILES if profile.get("tier", 1) == 1]
+
+
 def random_class_profile():
-    return random.choice(CLASS_PROFILES)
+    # Only base (tier-1) classes can be rolled for new recruits / enemies;
+    # tier-2 classes are reached exclusively through promotion.
+    return random.choice(TIER1_PROFILES)
 
 
 def get_weapon_spec(weapon_id):

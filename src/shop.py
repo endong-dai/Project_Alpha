@@ -3,7 +3,7 @@ shop.py
 Shared shop catalog and item factory helpers.
 """
 
-from inventory import Antidote, Potion
+from inventory import Antidote, PromotionSeal, Potion
 from unit_classes import get_weapon_spec
 from weapon import Weapon
 
@@ -49,6 +49,12 @@ SHOP_ITEMS = [
         "kind": "antidote",
         "price": 60,
     },
+    {
+        "id": "master_seal",
+        "name": "Master Seal",
+        "kind": "promotion_seal",
+        "price": 300,
+    },
 ]
 
 SHOP_LOOKUP = {item["id"]: item for item in SHOP_ITEMS}
@@ -78,6 +84,8 @@ def create_item(item_id):
         )
     if item["kind"] == "potion":
         return Potion(item["name"], item["heal_amount"])
+    if item["kind"] == "promotion_seal":
+        return PromotionSeal(item["name"])
     return Antidote(item["name"])
 
 
