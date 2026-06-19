@@ -25,8 +25,8 @@ else
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 fi
 
-echo "==> 3/6 pygbag 打包 web 版 (排除 docs/build/tests 避免 apk 膨胀)"
-python3 -m pygbag --build --ignore ".git,docs,build,tests,__pycache__,.claude" main.py
+echo "==> 3/6 pygbag 打包 web 版"
+python3 -m pygbag --build --template default.tmpl main.py
 
 echo "==> 4/6 覆盖进 docs/"
 cp -r build/web/* docs/
